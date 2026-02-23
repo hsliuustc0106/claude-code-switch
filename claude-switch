@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Claude Switch - Main command
+# Delegates to switch-lib.sh
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+SWITCH_LIB="$SCRIPT_DIR/switch-lib.sh"
+
+# Ensure the target is executable if present
+if [[ -f "$SWITCH_LIB" && ! -x "$SWITCH_LIB" ]]; then
+    chmod +x "$SWITCH_LIB" 2>/dev/null || true
+fi
+
+if [[ ! -f "$SWITCH_LIB" ]]; then
+    echo "claude-switch error: missing $SWITCH_LIB" >&2
+    exit 1
+fi
+
+exec "$SWITCH_LIB" "$@"

@@ -61,6 +61,102 @@ detect_os() {
 
 OS_TYPE=$(detect_os)
 
+# ============================================
+# CPU Architecture Detection
+# ============================================
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)    echo "x64" ;;
+        i386|i686)       echo "x86" ;;
+        aarch64|arm64)   echo "arm64" ;;
+        armv7l)          echo "arm" ;;
+        *)               echo "unknown" ;;
+    esac
+}
+
+ARCH_TYPE=$(detect_arch)
+
+# ============================================
+# Platform Abstraction Layer
+# Hides platform-specific differences
+# ============================================
+
+# Cross-platform base64 encoding (no line breaks)
+platform::base64_encode() {
+    if [[ "$OS_TYPE" == "macos" ]]; then
+        base64
+    else
+        if base64 --help 2>&1 | grep -q -- '-w'; then
+            base64 -w 0
+        else
+            base64 | tr -d '\n'
+        fi
+    fi
+}
+
+# Cross-platform base64 decoding
+platform::base64_decode() {
+    base64 -d
+}
+
+# Cross-platform sed in-place edit
+# Usage: platform::sed_inplace "pattern" file
+platform::sed_inplace() {
+    local pattern="$1"
+    local file="$2"
+    if [[ "$OS_TYPE" == "macos" ]]; then
+        sed -i '' "$pattern" "$file"
+    else
+        sed -i "$pattern" "$file"
+    fi
+}
+
+# Cross-platform epoch to readable date
+platform::date_format() {
+    local seconds="$1"
+    if [[ "$OS_TYPE" == "macos" ]]; then
+        date -r "$seconds" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown"
+    else
+        date -d "@$seconds" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown"
+    fi
+}
+
+# Get credentials from platform-specific storage
+platform::credentials_read() {
+    case "$OS_TYPE" in
+        macos)  read_macos_credentials ;;
+        linux)  read_linux_credentials ;;
+        *)      return 1 ;;
+    esac
+}
+
+# Write credentials to platform-specific storage
+platform::credentials_write() {
+    local credentials="$1"
+    case "$OS_TYPE" in
+        macos)  write_macos_credentials "$credentials" ;;
+        linux)  write_linux_credentials "$credentials" ;;
+        *)      return 1 ;;
+    esac
+}
+
+# Get platform-specific default editor command
+platform::get_editor() {
+    if command -v cursor >/dev/null 2>&1; then
+        echo "cursor"
+    elif command -v code >/dev/null 2>&1; then
+        echo "code"
+    elif [[ "$OS_TYPE" == "macos" ]] && command -v open >/dev/null 2>&1; then
+        echo "open"
+    elif command -v vim >/dev/null 2>&1; then
+        echo "vim"
+    elif command -v nano >/dev/null 2>&1; then
+        echo "nano"
+    else
+        echo ""
+    fi
+}
+
 # 配置文件路径
 CONFIG_FILE="$HOME/.claude_switch_config"
 ACCOUNTS_FILE="$HOME/.claude_switch_accounts"
@@ -827,43 +923,6 @@ user_show_usage() {
     echo "  claude-switch user reset # Remove, use env vars instead" >&2
 }
 
-# 跨平台 base64 编码函数（无换行）
-base64_encode_nolinebreak() {
-    if [[ "$OS_TYPE" == "macos" ]]; then
-        base64
-    else
-        if base64 --help 2>&1 | grep -q -- '-w'; then
-            base64 -w 0
-        else
-            base64 | tr -d '\n'
-        fi
-    fi
-}
-
-# 跨平台 base64 解码函数
-base64_decode() {
-    if [[ "$OS_TYPE" == "macos" ]]; then
-        base64 -d
-    else
-        base64 -d
-    fi
-}
-
-# 跨平台时间格式化（毫秒时间戳 -> 可读时间）
-format_epoch_ms() {
-    local ms="$1"
-    if [[ -z "$ms" ]]; then
-        echo "Unknown"
-        return 0
-    fi
-    local seconds=$((ms / 1000))
-    if [[ "$OS_TYPE" == "macos" ]]; then
-        date -r "$seconds" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown"
-    else
-        date -d "@$seconds" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown"
-    fi
-}
-
 # 从 Linux 文件系统读取 Claude Code 凭证
 read_linux_credentials() {
     if [[ ! -f "$CLAUDE_CREDENTIALS_FILE" ]]; then
@@ -914,22 +973,6 @@ read_macos_credentials() {
     done
     echo ""
     return 1
-}
-
-# 跨平台凭证读取函数
-read_keychain_credentials() {
-    case "$OS_TYPE" in
-        macos)
-            read_macos_credentials
-            ;;
-        linux)
-            read_linux_credentials
-            ;;
-        *)
-            echo -e "${RED}❌ Unsupported OS: $OS_TYPE${NC}" >&2
-            return 1
-            ;;
-    esac
 }
 
 # 写入凭证到 Linux 文件系统
@@ -1002,34 +1045,16 @@ write_macos_credentials() {
     return $result
 }
 
-# 跨平台凭证写入函数
-write_keychain_credentials() {
-    local credentials="$1"
-
-    case "$OS_TYPE" in
-        macos)
-            write_macos_credentials "$credentials"
-            ;;
-        linux)
-            write_linux_credentials "$credentials"
-            ;;
-        *)
-            echo -e "${RED}❌ Unsupported OS: $OS_TYPE${NC}" >&2
-            return 1
-            ;;
-    esac
-}
-
 # 调试函数：验证 Keychain 中的凭证
 debug_keychain_credentials() {
     # 根据操作系统显示不同标题
     if [[ "$OS_TYPE" == "macos" ]]; then
-        echo -e "${BLUE}🔍 $(t 'credentials_source_keychain')${NC}"
+        echo -e "${BLUE}🔍 $(t 'credentials_source_keychain'): ${OS_TYPE} (${ARCH_TYPE})${NC}"
     else
-        echo -e "${BLUE}🔍 $(t 'credentials_source_file')${NC}"
+        echo -e "${BLUE}🔍 $(t 'credentials_source_file'): ${OS_TYPE} (${ARCH_TYPE})${NC}"
     fi
 
-    local credentials=$(read_keychain_credentials)
+    local credentials=$(platform::credentials_read)
     if [[ -z "$credentials" ]]; then
         if [[ "$OS_TYPE" == "macos" ]]; then
             echo -e "${RED}❌ Keychain 中没有凭证${NC}"
@@ -1064,7 +1089,7 @@ debug_keychain_credentials() {
         while IFS=': ' read -r name encoded; do
             name=$(echo "$name" | tr -d '"')
             encoded=$(echo "$encoded" | tr -d '"')
-            local saved_creds=$(echo "$encoded" | base64_decode 2>/dev/null)
+            local saved_creds=$(echo "$encoded" | platform::base64_decode 2>/dev/null)
             if [[ "$saved_creds" == "$credentials" ]]; then
                 echo -e "${GREEN}✅ $(t 'matched_account'): $name${NC}"
                 return 0
@@ -1098,7 +1123,7 @@ save_account() {
 
     # 从 Keychain 读取当前凭证
     local credentials
-    credentials=$(read_keychain_credentials)
+    credentials=$(platform::credentials_read)
     if [[ -z "$credentials" ]]; then
         echo -e "${RED}❌ $(t 'no_credentials_found')${NC}" >&2
         echo -e "${YELLOW}💡 $(t 'please_login_first')${NC}" >&2
@@ -1118,7 +1143,7 @@ save_account() {
 
     # 简单的 JSON 更新：如果是空文件或只有 {}，直接写入
     if [[ "$existing_accounts" == "{}" || -z "$existing_accounts" ]]; then
-        local encoded_creds=$(echo "$credentials" | base64_encode_nolinebreak)
+        local encoded_creds=$(echo "$credentials" | platform::base64_encode)
         cat > "$ACCOUNTS_FILE" << EOF
 {
   "$account_name": "$encoded_creds"
@@ -1129,22 +1154,14 @@ EOF
         # 检查账号是否已存在
         if grep -q "\"$account_name\":" "$ACCOUNTS_FILE"; then
             # 更新现有账号
-            local encoded_creds=$(echo "$credentials" | base64_encode_nolinebreak)
+            local encoded_creds=$(echo "$credentials" | platform::base64_encode)
             # 使用 sed 替换现有条目（跨平台兼容）
-            if [[ "$OS_TYPE" == "macos" ]]; then
-                sed -i '' "s/\"$account_name\": *\"[^\"]*\"/\"$account_name\": \"$encoded_creds\"/" "$ACCOUNTS_FILE"
-            else
-                sed -i "s/\"$account_name\": *\"[^\"]*\"/\"$account_name\": \"$encoded_creds\"/" "$ACCOUNTS_FILE"
-            fi
+            platform::sed_inplace "s/\"$account_name\": *\"[^\"]*\"/\"$account_name\": \"$encoded_creds\"/" "$ACCOUNTS_FILE"
         else
             # 添加新账号
-            local encoded_creds=$(echo "$credentials" | base64_encode_nolinebreak)
+            local encoded_creds=$(echo "$credentials" | platform::base64_encode)
             # 移除最后的 } 并在上一行末尾添加逗号
-            if [[ "$OS_TYPE" == "macos" ]]; then
-                sed '$d' "$ACCOUNTS_FILE" | sed '' '$s/$/,/' > "$temp_file"
-            else
-                sed '$d' "$ACCOUNTS_FILE" | sed '$s/$/,/' > "$temp_file"
-            fi
+            sed '$d' "$ACCOUNTS_FILE" | sed '$s/$/,/' > "$temp_file"
             echo "  \"$account_name\": \"$encoded_creds\"" >> "$temp_file"
             echo "}" >> "$temp_file"
             mv "$temp_file" "$ACCOUNTS_FILE"
@@ -1191,10 +1208,10 @@ switch_account() {
     fi
 
     # 解码凭证
-    local credentials=$(echo "$encoded_creds" | base64_decode)
+    local credentials=$(echo "$encoded_creds" | platform::base64_decode)
 
     # 写入 Keychain
-    if write_keychain_credentials "$credentials"; then
+    if platform::credentials_write "$credentials"; then
         echo -e "${GREEN}✅ $(t 'account_switched'): $account_name${NC}"
         echo -e "${YELLOW}⚠️  $(t 'please_restart_claude_code')${NC}"
     else
@@ -1214,13 +1231,13 @@ list_accounts() {
     echo -e "${BLUE}📋 $(t 'saved_accounts'):${NC}"
 
     # 读取并解析账号列表
-    local current_creds=$(read_keychain_credentials)
+    local current_creds=$(platform::credentials_read)
 
     # 使用 jq 或 Python 解析 JSON（处理多行 base64 值）
     if command -v jq >/dev/null 2>&1; then
         jq -r 'to_entries[] | "\(.key)|\(.value)"' "$ACCOUNTS_FILE" | while IFS='|' read -r name encoded; do
             # 解码并提取信息
-            local creds=$(echo "$encoded" | base64_decode 2>/dev/null)
+            local creds=$(echo "$encoded" | platform::base64_decode 2>/dev/null)
             local subscription=$(echo "$creds" | grep -o '"subscriptionType":"[^"]*"' | cut -d'"' -f4)
             local expires=$(echo "$creds" | grep -o '"expiresAt":[0-9]*' | cut -d':' -f2)
 
@@ -1233,7 +1250,7 @@ list_accounts() {
             # 格式化过期时间
             local expires_str=""
             if [[ -n "$expires" ]]; then
-                expires_str=$(format_epoch_ms "$expires")
+                expires_str=$(platform::date_format "$((expires / 1000))")
             fi
 
             echo -e "   - ${YELLOW}$name${NC} (${subscription:-Unknown}${expires_str:+, expires: $expires_str})$is_current"
@@ -1247,7 +1264,7 @@ with open('$ACCOUNTS_FILE') as f:
         print(f'{name}|{encoded}')
 " | while IFS='|' read -r name encoded; do
             # 解码并提取信息
-            local creds=$(echo "$encoded" | base64_decode 2>/dev/null)
+            local creds=$(echo "$encoded" | platform::base64_decode 2>/dev/null)
             local subscription=$(echo "$creds" | grep -o '"subscriptionType":"[^"]*"' | cut -d'"' -f4)
             local expires=$(echo "$creds" | grep -o '"expiresAt":[0-9]*' | cut -d':' -f2)
 
@@ -1260,7 +1277,7 @@ with open('$ACCOUNTS_FILE') as f:
             # 格式化过期时间
             local expires_str=""
             if [[ -n "$expires" ]]; then
-                expires_str=$(format_epoch_ms "$expires")
+                expires_str=$(platform::date_format "$((expires / 1000))")
             fi
 
             echo -e "   - ${YELLOW}$name${NC} (${subscription:-Unknown}${expires_str:+, expires: $expires_str})$is_current"
@@ -1302,13 +1319,8 @@ delete_account() {
     grep -v "\"$account_name\":" "$ACCOUNTS_FILE" > "$temp_file"
 
     # 清理可能的逗号问题（跨平台兼容）
-    if [[ "$OS_TYPE" == "macos" ]]; then
-        sed -i '' 's/,\s*}/}/g' "$temp_file"
-        sed -i '' 's/}\s*,/}/g' "$temp_file"
-    else
-        sed -i 's/,\s*}/}/g' "$temp_file"
-        sed -i 's/}\s*,/}/g' "$temp_file"
-    fi
+    platform::sed_inplace 's/,\s*}/}/g' "$temp_file"
+    platform::sed_inplace 's/}\s*,/}/g' "$temp_file"
 
     mv "$temp_file" "$ACCOUNTS_FILE"
     chmod 600 "$ACCOUNTS_FILE"
@@ -1318,7 +1330,7 @@ delete_account() {
 
 # 显示当前账号信息
 get_current_account() {
-    local credentials=$(read_keychain_credentials)
+    local credentials=$(platform::credentials_read)
 
     if [[ -z "$credentials" ]]; then
         echo -e "${YELLOW}$(t 'no_current_account')${NC}"
@@ -1334,7 +1346,7 @@ get_current_account() {
     # 格式化过期时间
     local expires_str=""
     if [[ -n "$expires" ]]; then
-        expires_str=$(format_epoch_ms "$expires")
+        expires_str=$(platform::date_format "$((expires / 1000))")
     fi
 
     # 查找账号名称
@@ -1343,7 +1355,7 @@ get_current_account() {
         while IFS=': ' read -r name encoded; do
             name=$(echo "$name" | tr -d '"')
             encoded=$(echo "$encoded" | tr -d '"')
-            local saved_creds=$(echo "$encoded" | base64_decode 2>/dev/null)
+            local saved_creds=$(echo "$encoded" | platform::base64_decode 2>/dev/null)
             if [[ "$saved_creds" == "$credentials" ]]; then
                 account_name="$name"
                 break
@@ -1528,32 +1540,41 @@ edit_config() {
 
     echo -e "${BLUE}🔧 $(t 'opening_config_file')...${NC}"
     echo -e "${YELLOW}$(t 'config_file_path'): $CONFIG_FILE${NC}"
-    
+
     # 按优先级尝试不同的编辑器
-    if command -v cursor >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ $(t 'using_cursor')${NC}"
-        cursor "$CONFIG_FILE" &
-        echo -e "${YELLOW}💡 $(t 'config_opened') Cursor $(t 'opened_edit_save')${NC}"
-    elif command -v code >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ $(t 'using_vscode')${NC}"
-        code "$CONFIG_FILE" &
-        echo -e "${YELLOW}💡 $(t 'config_opened') VS Code $(t 'opened_edit_save')${NC}"
-    elif [[ "$OSTYPE" == "darwin"* ]] && command -v open >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ $(t 'using_default_editor')${NC}"
-        open "$CONFIG_FILE"
-        echo -e "${YELLOW}💡 $(t 'config_opened_default')${NC}"
-    elif command -v vim >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ $(t 'using_vim')${NC}"
-        vim "$CONFIG_FILE"
-    elif command -v nano >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ $(t 'using_nano')${NC}"
-        nano "$CONFIG_FILE"
-    else
-        echo -e "${RED}❌ $(t 'no_editor_found')${NC}"
-        echo -e "${YELLOW}$(t 'edit_manually'): $CONFIG_FILE${NC}"
-        echo -e "${YELLOW}$(t 'install_editor'): cursor, code, vim, nano${NC}"
-        return 1
-    fi
+    local editor
+    editor=$(platform::get_editor)
+    case "$editor" in
+        cursor)
+            echo -e "${GREEN}✅ $(t 'using_cursor')${NC}"
+            cursor "$CONFIG_FILE" &
+            echo -e "${YELLOW}💡 $(t 'config_opened') Cursor $(t 'opened_edit_save')${NC}"
+            ;;
+        code)
+            echo -e "${GREEN}✅ $(t 'using_vscode')${NC}"
+            code "$CONFIG_FILE" &
+            echo -e "${YELLOW}💡 $(t 'config_opened') VS Code $(t 'opened_edit_save')${NC}"
+            ;;
+        open)
+            echo -e "${GREEN}✅ $(t 'using_default_editor')${NC}"
+            open "$CONFIG_FILE"
+            echo -e "${YELLOW}💡 $(t 'config_opened_default')${NC}"
+            ;;
+        vim)
+            echo -e "${GREEN}✅ $(t 'using_vim')${NC}"
+            vim "$CONFIG_FILE"
+            ;;
+        nano)
+            echo -e "${GREEN}✅ $(t 'using_nano')${NC}"
+            nano "$CONFIG_FILE"
+            ;;
+        *)
+            echo -e "${RED}❌ $(t 'no_editor_found')${NC}"
+            echo -e "${YELLOW}$(t 'edit_manually'): $CONFIG_FILE${NC}"
+            echo -e "${YELLOW}$(t 'install_editor'): cursor, code, vim, nano${NC}"
+            return 1
+            ;;
+    esac
 }
 
 # 更新配置文件中的模型 ID（当默认值变化时）
@@ -1584,11 +1605,7 @@ update_config() {
         # 检查配置文件中是否有需要更新的旧值
         if grep -qE "^[[:space:]]*${key}[[:space:]]*=[[:space:]]*${old_value}([[:space:]]*$|[[:space:]]*#)" "$CONFIG_FILE" 2>/dev/null; then
             # 使用 sed 替换
-            if [[ "$OS_TYPE" == "macos" ]]; then
-                sed -i '' "s|^\([[:space:]]*${key}[[:space:]]*=[[:space:]]*\)${old_value}|\1${new_value}|" "$CONFIG_FILE"
-            else
-                sed -i "s|^\([[:space:]]*${key}[[:space:]]*=[[:space:]]*\)${old_value}|\1${new_value}|" "$CONFIG_FILE"
-            fi
+            platform::sed_inplace "s|^\([[:space:]]*${key}[[:space:]]*=[[:space:]]*\)${old_value}|\1${new_value}|" "$CONFIG_FILE"
             echo -e "${GREEN}✅ Updated ${key}: ${old_value} → ${new_value}${NC}" >&2
             ((updated_count++))
         fi

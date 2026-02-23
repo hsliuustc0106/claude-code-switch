@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Claude Launch - Launcher script
+# Switch model via switch-lib.sh and then exec `claude`
+# This affects only the spawned `claude` process, not your parent shell.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+SWITCH_CMD_DEFAULT="$SCRIPT_DIR/switch-lib.sh"
+SWITCH="${SWITCH_CMD:-$SWITCH_CMD_DEFAULT}"
+
+usage() {
+    cat <<EOF
+Usage: ./claude-launch glm [claude-options]
+       ./claude-launch open glm [claude-options]
+
+Examples:
+  ./claude-launch glm                    # Launch Claude Code with GLM
+  ./claude-launch open glm               # Launch with OpenRouter (GLM)
+  ./claude-launch glm --dangerously-skip-permissions  # Pass options to Claude Code
+
+Available models:
+  GLM: glm (Zhipu GLM-5)
+  OpenRouter: open <provider> (glm)
+EOF
+}
+
+if [[ ! -f "$SWITCH" ]]; then
+    echo "claude-launch error: cannot find switch CLI at $SWITCH" >&2
+    echo "Hint: ensure switch-lib.sh exists next to this script, or set SWITCH_CMD=/path/to/switch-lib.sh" >&2
+    exit 1
+fi
+
+if [[ $# -lt 1 ]]; then
+    usage
+    exit 1
+fi
+
+model=""
+open_provider=""
+
+if [[ "${1:-}" == "open" ]]; then
+    shift || true
+    if [[ $# -lt 1 ]]; then
+        usage
+        exit 1
+    fi
+    model="open"
+    open_provider="$1"
+    shift || true
+else
+    model="$1"
+    shift || true
+fi
+
+# Helper: is known model keyword
+is_known_model() {
+    case "$1" in
+        glm|glm5|open)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+# Configure environment for this process using switch-lib.sh
+if [[ "$model" == "open" ]]; then
+    eval "$("$SWITCH" open "$open_provider")"
+else
+    case "$model" in
+        glm|glm5)
+            eval "$("$SWITCH" "$model")"
+            ;;
+        *)
+            echo "❌ Unknown model: $model" >&2
+            echo "Supported models: glm" >&2
+            echo "For OpenRouter: open <provider>" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+# Remaining args are passed through to `claude`
+claude_args=("$@")
+
+# Friendly status
+echo ""
+echo "🚀 Launching Claude Code..."
+echo "   Model: ${ANTHROPIC_MODEL:-'(unset)'}"
+echo "   Base URL: ${ANTHROPIC_BASE_URL:-'Default (Anthropic)'}"
+
+# Ensure `claude` is available
+if ! command -v claude >/dev/null 2>&1; then
+    echo "❌ 'claude' CLI not found. Install it first: npm install -g @anthropic-ai/claude-code" >&2
+    exit 127
+fi
+
+# Exec into Claude Code with the configured environment
+if [[ ${#claude_args[@]} -eq 0 ]]; then
+    exec claude
+else
+    exec claude "${claude_args[@]}"
+fi

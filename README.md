@@ -1,4 +1,4 @@
-# Claude Code Switch (ccm)
+# Claude Switch
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/foreveryh/claude-code-switch.svg)](https://github.com/foreveryh/claude-code-switch/stargazers)
@@ -6,47 +6,52 @@
 
 Switch Claude Code between AI providers with one command.
 
-[中文文档](README_CN.md)
+**中文文档 | [English Documentation](#english-documentation)**
 
-## Quick Start
+---
+
+## English Documentation
+
+### Quick Start
 
 ```bash
 # 1. Install
-curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/quick-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/install.sh | bash
 
 # 2. Reload shell
 source ~/.zshrc  # or ~/.bashrc
 
-# 3. Configure your API keys
-ccm config
+# 3. Run the setup wizard (interactive)
+claude-switch setup
 
-# 4. Switch and use
-ccm glm              # switch to GLM
-ccc glm global       # switch + launch Claude Code
+# 4. Start using Claude Code
+claude-launch glm        # launch with GLM
+claude-launch open glm   # launch with GLM via OpenRouter
 
-# Advanced: User-level settings (highest priority, overrides everything)
-ccm user glm global      # Set GLM as default for all projects
-ccm user reset           # Restore environment variable control
-
-# Advanced: Project-only override
-ccm project glm china    # GLM for this project only
-
-# Advanced: Multiple Claude Pro accounts
-ccm save-account work    # save current account
-ccm switch-account work  # switch to saved account
+# Add more providers anytime
+claude-switch setup
 ```
+
+### What the Wizard Does
+
+The `claude-switch setup` wizard walks you through:
+1. **Provider selection** - Choose from GLM, OpenRouter, or manual config
+2. **API key input** - Enter your key with format validation
+3. **Save & confirm** - Configuration saved, ready to use
+
+Run `claude-switch setup` again to add more providers.
 
 ---
 
-## Installation
+### Installation
 
-### Quick Install (Recommended)
+#### Quick Install (Recommended)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/quick-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/install.sh | bash
 source ~/.zshrc  # or ~/.bashrc
 ```
 
-### Local Install
+#### Local Install
 ```bash
 git clone https://github.com/foreveryh/claude-code-switch.git
 cd claude-code-switch
@@ -54,7 +59,7 @@ cd claude-code-switch
 source ~/.zshrc
 ```
 
-### Install Modes
+#### Install Modes
 
 | Mode | Command | Use Case |
 |------|---------|----------|
@@ -62,310 +67,340 @@ source ~/.zshrc
 | **System** | `./install.sh --system` | Shared machine, all users |
 | **Project** | `./install.sh --project` | Project-specific, isolated setup |
 
-### Install Options
+#### Install Options
 ```bash
 ./install.sh --no-rc           # Skip shell rc injection
 ./install.sh --cleanup-legacy  # Remove old installation
 ./install.sh --help            # Show all options
 ```
 
-### Uninstall
+#### Uninstall
 ```bash
 ./uninstall.sh
 ```
 
 ---
 
-## First-Time Setup
+### First-Time Setup
 
-### 1. Configure API Keys
+#### Method 1: Interactive Wizard (Recommended)
+
 ```bash
-ccm config
+claude-switch setup
 ```
 
-This opens `~/.ccm_config` in your editor. Add your API keys:
+The wizard guides you through:
+1. Select your primary AI provider (GLM, OpenRouter, or manual)
+2. Enter your API key (with format validation)
+3. Configuration saved automatically
 
+**Direct setup** (skip menu):
 ```bash
-# Required for each provider you want to use
-DEEPSEEK_API_KEY=sk-...
-KIMI_API_KEY=...
-GLM_API_KEY=...
-QWEN_API_KEY=...
-MINIMAX_API_KEY=...
-ARK_API_KEY=...           # For Doubao/Seed
-OPENROUTER_API_KEY=...    # For OpenRouter
-CLAUDE_API_KEY=...        # Optional, for Claude API (vs subscription)
+claude-switch setup --provider=glm
 ```
 
-### 2. Verify Setup
+#### Method 2: Manual Configuration
+
 ```bash
-ccm status    # Check current configuration
+claude-switch config    # Opens ~/.claude_switch_config in your editor
+```
+
+Add your API keys:
+
+```bash
+# GLM (Zhipu)
+GLM_API_KEY=your-glm-api-key
+
+# OpenRouter
+OPENROUTER_API_KEY=your-openrouter-api-key
+```
+
+#### Verify Setup
+
+```bash
+claude-switch status    # Check current configuration (keys are masked)
 ```
 
 ---
 
-## Basic Usage
+### Basic Usage
 
-### Switch Provider (in current shell)
+#### Switch Provider (in current shell)
 ```bash
-ccm glm global        # GLM global (default)
-ccm glm china         # GLM China
-ccm deepseek          # DeepSeek
-ccm kimi global       # Kimi global
-ccm kimi china        # Kimi China
-ccm qwen global       # Qwen global
-ccm minimax           # MiniMax
-ccm seed              # Doubao/Seed
-ccm claude            # Claude official
+eval "$(claude-switch glm)"        # GLM (direct)
+eval "$(claude-switch open glm)"   # GLM via OpenRouter
 ```
 
-### Switch + Launch Claude Code
+#### Switch + Launch Claude Code
 ```bash
-ccc glm global        # Switch to GLM global, then launch
-ccc glm china         # Switch to GLM China, then launch
-ccc open glm          # Via OpenRouter
+claude-launch glm        # Switch to GLM, then launch
+claude-launch open glm   # Via OpenRouter
 ```
 
-### Check Status
+#### Check Status
 ```bash
-ccm status             # Show current model and API key status
-ccm current-account    # Show current Claude Pro account
+claude-switch status             # Show current model and API key status
+claude-switch current-account    # Show current Claude Pro account
 ```
 
-### Update Config
+#### Update Config
 When model IDs change in new versions, update your config:
 ```bash
-ccm update-config      # Update outdated model IDs to latest defaults
+claude-switch update-config      # Update outdated model IDs to latest defaults
 ```
 
-### Get Help
+#### Get Help
 ```bash
-ccm help               # Show all commands
-ccc                    # Show ccc usage (no args)
+claude-switch help               # Show all commands
+claude-launch                    # Show claude-launch usage (no args)
 ```
 
 ---
 
-## Providers Reference
+### Providers Reference
 
-### Direct Providers (API Key Required)
+#### Direct Providers (API Key Required)
 
-| Provider | Command | Region | Base URL |
-|----------|---------|--------|----------|
-| GLM | `ccm glm [global\|china]` | global (default) | `api.z.ai/api/anthropic` |
-| | | china | `open.bigmodel.cn/api/anthropic` |
-| DeepSeek | `ccm deepseek` | - | `api.deepseek.com/anthropic` |
-| Kimi | `ccm kimi [global\|china]` | global (default) | `api.moonshot.ai/anthropic` |
-| | | china | `api.moonshot.cn/anthropic` |
-| Qwen | `ccm qwen [global\|china]` | global (default) | `coding-intl.dashscope.aliyuncs.com/apps/anthropic` |
-| | | china | `coding.dashscope.aliyuncs.com/apps/anthropic` |
-| MiniMax | `ccm minimax [global\|china]` | global (default) | `api.minimax.io/anthropic` |
-| | | china | `api.minimaxi.com/anthropic` |
-| Seed/Doubao | `ccm seed [variant]` | - | `ark.cn-beijing.volces.com/api/coding` |
-| Claude | `ccm claude` | - | `api.anthropic.com` |
+| Provider | Command | Base URL |
+|----------|---------|----------|
+| GLM | `claude-switch glm` | `api.z.ai/api/anthropic` |
 
 > **GLM Coding Plan**: [bigmodel.cn/glm-coding](https://www.bigmodel.cn/glm-coding?ic=5XMIOZPPXB)
->
-> **Doubao Coding Plan**: [volcengine.com](https://volcengine.com/L/rLv5d5OWXgg/) (Invite code: `ZP5PZMEY`)
 
-### Seed Variants
+#### OpenRouter
+
+Access GLM via OpenRouter:
+
 ```bash
-ccm seed              # ark-code-latest (default)
-ccm seed doubao       # doubao-seed-code
-ccm seed glm          # glm-5
-ccm seed deepseek     # deepseek-v3.2
-ccm seed kimi         # kimi-k2.5
+claude-switch open              # Show help
+claude-switch open glm          # GLM via OpenRouter
 ```
-
-### OpenRouter
-```bash
-ccm open              # Show help
-ccm open claude       # Claude via OpenRouter
-ccm open glm          # GLM via OpenRouter
-ccm open kimi         # Kimi via OpenRouter
-ccm open deepseek     # DeepSeek via OpenRouter
-ccm open qwen         # Qwen via OpenRouter
-ccm open minimax      # MiniMax via OpenRouter
-ccm open stepfun      # StepFun via OpenRouter
-ccm open sf-free      # StepFun free tier
-```
-
-**Available providers:** `claude`, `glm`, `kimi`, `deepseek`, `qwen`, `minimax`, `stepfun`
-
-**Free tier:** `stepfun-free` or `sf-free` for StepFun's free model
 
 ---
 
-## Advanced Features
+### Advanced Features
 
-### Claude Pro Account Management
+#### Claude Pro Account Management
 Switch between multiple Claude Pro subscriptions:
 
 ```bash
 # Save current logged-in account
-ccm save-account work
+claude-switch save-account work
 
 # Switch to saved account
-ccm switch-account work
+claude-switch switch-account work
 
 # List all saved accounts
-ccm list-accounts
+claude-switch list-accounts
 
 # Show current account
-ccm current-account
+claude-switch current-account
 
 # Delete saved account
-ccm delete-account work
+claude-switch delete-account work
 ```
 
-### User-Level Settings (Highest Priority)
-Write settings directly to `~/.claude/settings.json`. This overrides everything including environment variables and is useful when you have other tools (like Quotio) that also modify this file.
+#### User-Level Settings (Highest Priority)
+Write settings directly to `~/.claude/settings.json`. This overrides everything including environment variables.
 
 ```bash
 # Set provider at user level
-ccm user glm global      # GLM global for all projects
-ccm user glm china       # GLM China for all projects
-ccm user deepseek        # DeepSeek for all projects
-ccm user claude          # Claude official for all projects
+claude-switch user glm      # GLM for all projects
 
 # Reset to environment variable control
-ccm user reset           # Remove ccm settings, use env vars instead
+claude-switch user reset     # Remove settings, use env vars instead
 ```
 
 **When to use:**
-- You have Quotio or another proxy that sets `~/.claude/settings.json`
 - You want a persistent default that survives shell restarts
 - Environment variables are being overridden by something else
 
-### Project-Only Override
+#### Project-Only Override
 Override settings for a specific project (keeps global settings intact):
 
 ```bash
 # In your project directory
-ccm project glm global    # Use GLM for this project only
-ccm project glm china     # Use GLM China for this project
-ccm project reset         # Remove project override
+claude-switch project glm    # Use GLM for this project only
+claude-switch project reset  # Remove project override
 ```
 
 This creates/removes `.claude/settings.local.json` in the current project.
 
-### Launch with Account
+#### Launch with Account
 ```bash
-ccc work                  # Switch to 'work' account, then launch
-ccc claude:personal       # Switch to 'personal' account + use Claude
+claude-launch work           # Switch to 'work' account, then launch
+claude-launch glm:work       # Switch to 'work' account + use GLM
 ```
 
 ---
 
-## Configuration
+### Configuration
 
-### Priority Order (highest to lowest)
+#### Priority Order (highest to lowest)
 1. `~/.claude/settings.json` (env section) - User-level settings
 2. `.claude/settings.local.json` - Project-level settings
-3. `~/.ccm_config` file - **Always reloads on each ccm command**
+3. `~/.claude_switch_config` file - **Always reloads on each command**
 4. Environment variables (only used if config value is a placeholder)
 
-### Config File Location
+#### Config File Location
 ```
-~/.ccm_config
+~/.claude_switch_config
 ```
 
-### Full Config Example
+#### Full Config Example
 ```bash
 # Language (en or zh)
-CCM_LANGUAGE=en
+CLAUDE_SWITCH_LANGUAGE=en
 
-# API Keys (required for each provider)
-DEEPSEEK_API_KEY=sk-...
-KIMI_API_KEY=...
-GLM_API_KEY=...
-QWEN_API_KEY=...
-MINIMAX_API_KEY=...
-ARK_API_KEY=...
-OPENROUTER_API_KEY=...
-CLAUDE_API_KEY=...
+# API Keys
+GLM_API_KEY=your-glm-api-key
+OPENROUTER_API_KEY=your-openrouter-api-key
 
-# Model ID Overrides (optional)
-DEEPSEEK_MODEL=deepseek-chat
-KIMI_MODEL=kimi-k2.5
-KIMI_CN_MODEL=kimi-k2.5
-QWEN_MODEL=qwen3-max-2026-01-23
+# Model ID Override (optional)
 GLM_MODEL=glm-5
-MINIMAX_MODEL=MiniMax-M2.5
-SEED_MODEL=ark-code-latest
-CLAUDE_MODEL=claude-sonnet-4-5-20250929
-OPUS_MODEL=claude-opus-4-6
-HAIKU_MODEL=claude-haiku-4-5-20251001
 ```
 
 ---
 
-## Without RC Injection
+### Without RC Injection
 
 If you installed with `--no-rc` or want to use from cloned repo:
 
 ```bash
 # Switch model (apply env vars to current shell)
-eval "$(ccm glm global)"
-eval "$(./ccm.sh glm china)"
+eval "$(claude-switch glm)"
+eval "$(./switch-lib.sh glm)"
 
 # Or use the wrapper scripts directly
-./ccm glm global         # Just prints exports
-./ccc glm china          # Switch + launch
+./claude-switch glm         # Just prints exports
+./claude-launch glm         # Switch + launch
 ```
 
 ---
 
-## Notes
+### Notes
 
 - **7 env vars exported per provider**: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL`
-- **Claude official**: Uses your Claude Code subscription by default, or `CLAUDE_API_KEY` if set
-- **OpenRouter**: Requires explicit `ccm open <provider>` command
+- **OpenRouter**: Requires explicit `claude-switch open <provider>` command
 - **Project override**: Only affects the current project via `.claude/settings.local.json`
 
 ---
 
-## Contributing
+### Troubleshooting
 
-Contributions are welcome! Here's how you can help:
-
-### Report Issues
-Found a bug or have a feature request? [Open an issue](https://github.com/foreveryh/claude-code-switch/issues).
-
-### Submit Code
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
-### Development
-```bash
-git clone https://github.com/foreveryh/claude-code-switch.git
-cd claude-code-switch
-./ccm.sh help    # Test locally without installing
-```
+For common issues and solutions, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ---
 
-## What's New
+### Contributing
 
-### v2.4.0 (2025-02)
-- **`ccm user` command** - Write settings directly to `~/.claude/settings.json` (highest priority)
-- **`ccm update-config` command** - Update outdated model IDs automatically
-- **Config file now always reloads** - Edit `~/.ccm_config` and changes apply immediately
-- **Enhanced `ccm status`** - Detects and warns about user-level settings overrides
-- Model updates: Kimi → `kimi-k2.5`, MiniMax → `MiniMax-M2.5`, GLM → `glm-5`
-- Added Coding Plan links: GLM, Doubao
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## License
+### License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Acknowledgments
+## 中文文档
 
-This tool is inspired by the need to easily switch between AI providers while using Claude Code. Thanks to all contributors and the open-source community.
+### 快速开始
+
+```bash
+# 1. 安装
+curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/install.sh | bash
+
+# 2. 重新加载 shell
+source ~/.zshrc  # 或 ~/.bashrc
+
+# 3. 运行设置向导（交互式）
+claude-switch setup
+
+# 4. 开始使用 Claude Code
+claude-launch glm        # 使用 GLM 启动
+claude-launch open glm   # 通过 OpenRouter 使用 GLM 启动
+
+# 随时添加更多提供商
+claude-switch setup
+```
+
+### 安装
+
+#### 快速安装（推荐）
+```bash
+curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/install.sh | bash
+source ~/.zshrc  # 或 ~/.bashrc
+```
+
+#### 本地安装
+```bash
+git clone https://github.com/foreveryh/claude-code-switch.git
+cd claude-code-switch
+./install.sh
+source ~/.zshrc
+```
+
+### 基本用法
+
+#### 切换提供商（在当前 shell）
+```bash
+eval "$(claude-switch glm)"        # GLM（直接）
+eval "$(claude-switch open glm)"   # GLM（通过 OpenRouter）
+```
+
+#### 切换并启动 Claude Code
+```bash
+claude-launch glm        # 切换到 GLM，然后启动
+claude-launch open glm   # 通过 OpenRouter
+```
+
+#### 查看状态
+```bash
+claude-switch status             # 显示当前模型和 API 密钥状态
+claude-switch current-account    # 显示当前 Claude Pro 账号
+```
+
+### 提供商参考
+
+#### 直接提供商（需要 API 密钥）
+
+| 提供商 | 命令 | 基础 URL |
+|----------|---------|----------|
+| GLM | `claude-switch glm` | `api.z.ai/api/anthropic` |
+
+#### OpenRouter
+
+通过 OpenRouter 访问 GLM：
+
+```bash
+claude-switch open              # 显示帮助
+claude-switch open glm          # GLM 通过 OpenRouter
+```
+
+### 配置
+
+#### 配置文件位置
+```
+~/.claude_switch_config
+```
+
+#### 配置示例
+```bash
+# 语言（en 或 zh）
+CLAUDE_SWITCH_LANGUAGE=zh
+
+# API 密钥
+GLM_API_KEY=your-glm-api-key
+OPENROUTER_API_KEY=your-openrouter-api-key
+
+# 模型 ID 覆盖（可选）
+GLM_MODEL=glm-5
+```
+
+---
+
+### License
+
+MIT License - 详见 [LICENSE](LICENSE)

@@ -1,9 +1,12 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+############################################################
+# Claude Switch Installer
+# ---------------------------------------------------------
+# Can be sourced for functions or executed directly
+# One-command install: curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/install.sh | bash
+############################################################
 
-# Installer for Claude Code Model Switcher (CCM)
-# Default: user-level install (PATH-based)
-# Optional: system-level, project-level, rc-function injection, legacy cleanup
+set -euo pipefail
 
 # GitHub repository info
 GITHUB_REPO="${GITHUB_REPO:-foreveryh/claude-code-switch}"
@@ -19,8 +22,8 @@ else
   LOCAL_MODE=false
 fi
 
-BEGIN_MARK="# >>> ccm function begin >>>"
-END_MARK="# <<< ccm function end <<<"
+BEGIN_MARK="# >>> claude-switch function begin >>>"
+END_MARK="# <<< claude-switch function end <<<"
 
 MODE="user"              # user | system | project
 PREFIX=""               # explicit bin dir
@@ -33,7 +36,7 @@ INTERACTIVE=false        # interactive prompts
 t() {
   local en="$1"
   local zh="$2"
-  if [[ "${CCM_LANGUAGE:-${LANG:-}}" =~ ^zh ]]; then
+  if [[ "${CLAUDE_SWITCH_LANGUAGE:-${LANG:-}}" =~ ^zh ]]; then
     echo "$zh"
   else
     echo "$en"
@@ -59,10 +62,10 @@ Usage: ./install.sh [options]
 Options:
   --user                User-level install (default)
   --system              System-level install (may require sudo)
-  --project             Project-level install into .ccm/ (current dir)
+  --project             Project-level install into .claude-switch/ (current dir)
   --prefix <dir>        Override install bin directory
-  --rc                  Inject ccm/ccc functions into shell rc (default)
-  --no-rc               Do not inject ccm/ccc functions into shell rc
+  --rc                  Inject claude-switch/claude-launch functions into shell rc (default)
+  --no-rc               Do not inject functions into shell rc
   --cleanup-legacy      Remove legacy rc blocks and old install dirs
   --interactive         Force interactive prompts
   -y, --yes             Assume yes for prompts
@@ -75,6 +78,9 @@ Examples:
   ./install.sh --project
   ./install.sh --prefix "$HOME/bin"
   ./install.sh --cleanup-legacy
+
+Quick install (one-line):
+  curl -fsSL https://raw.githubusercontent.com/foreveryh/claude-code-switch/main/install.sh | bash
 USAGE
 }
 
@@ -166,7 +172,6 @@ find_system_bin_dir() {
   fi
   if [[ -d "/usr/local/bin" ]]; then
     echo "/usr/local/bin"
-    return 0
   fi
   echo "/usr/local/bin"
 }
@@ -185,10 +190,10 @@ select_bin_dir() {
 
 select_data_dir() {
   if [[ "$MODE" == "system" ]]; then
-    echo "/usr/local/share/ccm"
+    echo "/usr/local/share/claude-switch"
     return 0
   fi
-  echo "${XDG_DATA_HOME:-$HOME/.local/share}/ccm"
+  echo "${XDG_DATA_HOME:-$HOME/.local/share}/claude-switch"
 }
 
 detect_rc_files() {
@@ -222,16 +227,16 @@ append_function_block() {
   [[ -f "$rc" ]] || touch "$rc"
   cat >> "$rc" <<EOF
 $BEGIN_MARK
-# CCM: define a shell function that applies exports to current shell
+# Claude Switch: define a shell function that applies exports to current shell
 # Ensure no alias/function clashes
-unalias ccm 2>/dev/null || true
-unset -f ccm 2>/dev/null || true
-ccm() {
-  local script="$script_path"
+unalias claude-switch 2>/dev/null || true
+unset -f claude-switch 2>/dev/null || true
+claude-switch() {
+  local script="\$script_path"
   # Fallback search if the installed script was moved or XDG paths changed
   if [[ ! -f "\$script" ]]; then
-    local default1="\${XDG_DATA_HOME:-\$HOME/.local/share}/ccm/ccm.sh"
-    local default2="\$HOME/.ccm/ccm.sh"
+    local default1="\${XDG_DATA_HOME:-\$HOME/.local/share}/claude-switch/switch-lib.sh"
+    local default2="\$HOME/.claude-switch/switch-lib.sh"
     if [[ -f "\$default1" ]]; then
       script="\$default1"
     elif [[ -f "\$default2" ]]; then
@@ -239,7 +244,7 @@ ccm() {
     fi
   fi
   if [[ ! -f "\$script" ]]; then
-    echo "ccm error: script not found at \$script" >&2
+    echo "claude-switch error: script not found at \$script" >&2
     return 1
   fi
 
@@ -256,40 +261,37 @@ ccm() {
   esac
 }
 
-# CCC: Claude Code Commander - switch model and launch Claude Code
+# Claude Launch - switch model and launch Claude Code
 # Ensure no alias/function clashes
-unalias ccc 2>/dev/null || true
-unset -f ccc 2>/dev/null || true
-ccc() {
+unalias claude-launch 2>/dev/null || true
+unset -f claude-launch 2>/dev/null || true
+claude-launch() {
   if [[ \$# -eq 0 ]]; then
-    echo "Usage: ccc <model> [region|variant] [claude-options]"
-    echo "       ccc open <provider> [claude-options]"
-    echo "       ccc <account> [claude-options]            # Switch account then launch"
-    echo "       ccc <model>:<account> [claude-options]"
+    echo "Usage: claude-launch glm [claude-options]"
+    echo "       claude-launch open glm [claude-options]"
+    echo "       claude-launch <account> [claude-options]            # Switch account then launch"
+    echo "       claude-launch glm:<account> [claude-options]"
     echo ""
     echo "Examples:"
-    echo "  ccc deepseek                              # Launch with DeepSeek"
-    echo "  ccc open kimi                             # Launch with OpenRouter (kimi)"
-    echo "  ccc woohelps                              # Switch to 'woohelps' account and launch"
-    echo "  ccc claude:work                           # Switch to 'work' account and use Claude"
-    echo "  ccc glm --dangerously-skip-permissions    # Launch GLM with options"
+    echo "  claude-launch glm                               # Launch with GLM"
+    echo "  claude-launch open glm                          # Launch with OpenRouter (GLM)"
+    echo "  claude-launch work                              # Switch to 'work' account and launch"
+    echo "  claude-launch glm:work                          # Switch to 'work' account and use GLM"
     echo ""
     echo "Available models:"
-    echo "  Official: deepseek, glm, kimi, qwen, seed|doubao, claude, minimax"
-    echo "  OpenRouter: open <provider>"
-    echo "  Account:  <account> | claude:<account>"
+    echo "  GLM: glm (Zhipu GLM-5)"
+    echo "  OpenRouter: open <provider> (glm)"
+    echo "  Account:  <account> | glm:<account>"
     return 1
   fi
 
   local model=""
   local open_provider=""
-  local region_arg=""
-  local seed_variant=""
 
   if [[ "\$1" == "open" ]]; then
     shift || true
     if [[ \$# -lt 1 ]]; then
-      echo "Usage: ccc open <provider> [claude-options]"
+      echo "Usage: claude-launch open <provider> [claude-options]"
       return 1
     fi
     model="open"
@@ -299,55 +301,60 @@ ccc() {
     model="\$1"
     shift || true
   fi
-  
+
   # Helper: known model keyword
   _is_known_model() {
     case "\$1" in
-      deepseek|ds|glm|glm5|kimi|kimi2|qwen|minimax|mm|seed|doubao|claude|sonnet|s|open)
+      glm|glm5|open)
         return 0 ;;
       *)
         return 1 ;;
     esac
   }
 
-  # Configure environment via ccm
+  # Configure environment via claude-switch
   if [[ "\$model" != "open" ]] && [[ "\$model" != *:* ]] && ! _is_known_model "\$model" && [[ ! "\$model" =~ ^- ]]; then
     # Treat as account name
     local account="\$model"
     echo "🔄 Switching account to \$account..."
-    ccm switch-account "\$account" || return 1
-    ccm current-account || true
-    ccm claude || return 1
+    claude-switch switch-account "\$account" || return 1
+    claude-switch current-account || true
+    claude-switch glm || return 1
   else
     if [[ "\$model" == "open" ]]; then
       echo "🔄 Switching to OpenRouter (\$open_provider)..."
-      ccm open "\$open_provider" || return 1
+      claude-switch open "\$open_provider" || return 1
     else
       case "\$model" in
-        kimi|kimi2|qwen|glm|glm5|minimax|mm)
-          if [[ "\${1:-}" =~ ^(global|china|cn)$ ]]; then
-            region_arg="\$1"
-            shift || true
-          fi
+        glm|glm5)
+          echo "🔄 Switching to \$model..."
+          claude-switch "\$model" || return 1
           ;;
-        seed|doubao)
-          if [[ "\${1:-}" =~ ^(doubao|glm|glm5|deepseek|ds|kimi|kimi2)$ ]]; then
-            seed_variant="\$1"
-            shift || true
-          fi
+        *:*)
+          # Handle model:account format
+          local model_type="\${model%%:*}"
+          local account_name="\${model#*:}"
+          echo "🔄 Switching account to \$account_name..."
+          claude-switch switch-account "\$account_name" || return 1
+          claude-switch current-account || true
+          case "\$model_type" in
+            glm|glm5)
+              echo "🔄 Switching to \$model_type..."
+              claude-switch "\$model_type" || return 1
+              ;;
+            *)
+              echo "❌ Unknown model type: \$model_type" >&2
+              return 1
+              ;;
+          esac
+          ;;
+        *)
+          echo "❌ Unknown model: \$model" >&2
+          echo "Supported models: glm" >&2
+          echo "For OpenRouter: open <provider>" >&2
+          return 1
           ;;
       esac
-
-      if [[ -n "\$seed_variant" ]]; then
-        echo "🔄 Switching to \$model (\$seed_variant)..."
-        ccm "\$model" "\$seed_variant" || return 1
-      elif [[ -n "\$region_arg" ]]; then
-        echo "🔄 Switching to \$model (\$region_arg)..."
-        ccm "\$model" "\$region_arg" || return 1
-      else
-        echo "🔄 Switching to \$model..."
-        ccm "\$model" || return 1
-      fi
     fi
   fi
 
@@ -360,7 +367,7 @@ ccc() {
   echo "   Base URL: \${ANTHROPIC_BASE_URL:-Default (Anthropic)}"
   echo ""
 
-  # Ensure `claude` CLI exists
+  # Ensure \`claude\` CLI exists
   if ! type -p claude >/dev/null 2>&1; then
     echo "❌ 'claude' CLI not found. Install: npm install -g @anthropic-ai/claude-code" >&2
     return 127
@@ -385,19 +392,34 @@ legacy_detect() {
   rc_files=( $(detect_rc_files) )
   local rc
   for rc in "${rc_files[@]:-}"; do
+    # Old ccm/ccm marks
+    if grep -qF "# >>> ccm function begin >>>" "$rc"; then
+      found=true
+      legacy_msgs+=("- legacy ccm rc block in $rc")
+    fi
+    # New claude-switch marks
     if grep -qF "$BEGIN_MARK" "$rc"; then
       found=true
-      legacy_msgs+=("- legacy rc block in $rc")
+      legacy_msgs+=("- existing claude-switch rc block in $rc")
     fi
   done
   if [[ -d "$HOME/.ccm" ]]; then
     found=true
     legacy_msgs+=("- legacy dir $HOME/.ccm")
   fi
+  if [[ -d "$HOME/.claude-switch" ]]; then
+    found=true
+    legacy_msgs+=("- existing dir $HOME/.claude-switch")
+  fi
   local user_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/ccm"
+  local user_data_dir_new="${XDG_DATA_HOME:-$HOME/.local/share}/claude-switch"
   if [[ -d "$user_data_dir" && "$user_data_dir" != "$current_data_dir" ]]; then
     legacy_msgs+=("- legacy dir $user_data_dir")
     found=true
+  fi
+  if [[ -d "$user_data_dir_new" && "$user_data_dir_new" != "$current_data_dir" ]]; then
+    found=true
+    legacy_msgs+=("- existing dir $user_data_dir_new")
   fi
 
   if $found; then
@@ -413,10 +435,26 @@ cleanup_legacy() {
   rc_files=( $(detect_rc_files) )
   local rc
   for rc in "${rc_files[@]:-}"; do
+    # Remove old ccm blocks
+    local old_begin="# >>> ccm function begin >>>"
+    local old_end="# <<< ccm function end <<<"
+    if grep -qF "$old_begin" "$rc"; then
+      local tmp
+      tmp="$(mktemp)"
+      awk -v b="$old_begin" -v e="$old_end" '
+        $0==b {inblock=1; next}
+        $0==e {inblock=0; next}
+        !inblock {print}
+      ' "$rc" > "$tmp" && mv "$tmp" "$rc"
+      echo "🗑️  Removed ccm/ccc functions from: $rc"
+    fi
+    # Remove new claude-switch blocks
     remove_existing_block "$rc"
   done
   rm -rf "$HOME/.ccm" || true
   rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/ccm" || true
+  rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/claude-switch" || true
+  rm -rf "$HOME/.claude-switch" || true
 }
 
 download_from_github() {
@@ -434,36 +472,36 @@ download_from_github() {
 
 install_assets() {
   local data_dir="$1"
-  local dest_ccm_sh="$data_dir/ccm.sh"
+  local dest_switch_lib="$data_dir/switch-lib.sh"
 
   run_cmd "$data_dir" mkdir -p "$data_dir"
 
-  if $LOCAL_MODE && [[ -f "$SCRIPT_DIR/ccm.sh" ]]; then
+  if $LOCAL_MODE && [[ -f "$SCRIPT_DIR/switch-lib.sh" ]]; then
     log_info "Installing from local directory..."
-    run_cmd "$data_dir" cp -f "$SCRIPT_DIR/ccm.sh" "$dest_ccm_sh"
-    if [[ -d "$SCRIPT_DIR/lang" ]]; then
-      run_cmd "$data_dir" rm -rf "$data_dir/lang"
-      run_cmd "$data_dir" cp -R "$SCRIPT_DIR/lang" "$data_dir/lang"
+    run_cmd "$data_dir" cp -f "$SCRIPT_DIR/switch-lib.sh" "$dest_switch_lib"
+    if [[ -d "$SCRIPT_DIR/locale" ]]; then
+      run_cmd "$data_dir" rm -rf "$data_dir/locale"
+      run_cmd "$data_dir" cp -R "$SCRIPT_DIR/locale" "$data_dir/locale"
     fi
   else
     log_info "Installing from GitHub..."
-    download_from_github "${GITHUB_RAW}/ccm.sh" "$dest_ccm_sh" || {
-      log_error "failed to download ccm.sh"
+    download_from_github "${GITHUB_RAW}/switch-lib.sh" "$dest_switch_lib" || {
+      log_error "failed to download switch-lib.sh"
       exit 1
     }
-    run_cmd "$data_dir" mkdir -p "$data_dir/lang"
-    download_from_github "${GITHUB_RAW}/lang/zh.json" "$data_dir/lang/zh.json" || true
-    download_from_github "${GITHUB_RAW}/lang/en.json" "$data_dir/lang/en.json" || true
+    run_cmd "$data_dir" mkdir -p "$data_dir/locale"
+    download_from_github "${GITHUB_RAW}/locale/zh.json" "$data_dir/locale/zh.json" || true
+    download_from_github "${GITHUB_RAW}/locale/en.json" "$data_dir/locale/en.json" || true
   fi
 
-  run_cmd "$data_dir" chmod +x "$dest_ccm_sh"
+  run_cmd "$data_dir" chmod +x "$dest_switch_lib"
 }
 
-write_ccm_wrapper() {
+write_claude_switch_wrapper() {
   local bin_dir="$1"
   local mode="$2"
   local data_dir="$3"
-  local target="$bin_dir/ccm"
+  local target="$bin_dir/claude-switch"
 
   run_cmd "$bin_dir" mkdir -p "$bin_dir"
 
@@ -472,24 +510,24 @@ write_ccm_wrapper() {
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-CCM_SH="$SCRIPT_DIR/../ccm.sh"
-if [[ ! -f "$CCM_SH" ]]; then
-  echo "ccm error: missing $CCM_SH" >&2
+SWITCH_LIB="$SCRIPT_DIR/../switch-lib.sh"
+if [[ ! -f "$SWITCH_LIB" ]]; then
+  echo "claude-switch error: missing $SWITCH_LIB" >&2
   exit 1
 fi
-exec "$CCM_SH" "$@"
+exec "$SWITCH_LIB" "$@"
 EOF
   else
     local content
     content="$(cat <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-CCM_SH="__DATA_DIR__/ccm.sh"
-if [[ ! -f "$CCM_SH" ]]; then
-  echo "ccm error: missing $CCM_SH" >&2
+SWITCH_LIB="__DATA_DIR__/switch-lib.sh"
+if [[ ! -f "$SWITCH_LIB" ]]; then
+  echo "claude-switch error: missing $SWITCH_LIB" >&2
   exit 1
 fi
-exec "$CCM_SH" "$@"
+exec "$SWITCH_LIB" "$@"
 EOF
 )"
     content="${content//__DATA_DIR__/$data_dir}"
@@ -499,11 +537,11 @@ EOF
   run_cmd "$bin_dir" chmod +x "$target"
 }
 
-write_ccc_wrapper() {
+write_claude_launch_wrapper() {
   local bin_dir="$1"
   local mode="$2"
   local data_dir="$3"
-  local target="$bin_dir/ccc"
+  local target="$bin_dir/claude-launch"
 
   run_cmd "$bin_dir" mkdir -p "$bin_dir"
 
@@ -512,31 +550,26 @@ write_ccc_wrapper() {
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-CCM="$SCRIPT_DIR/../ccm.sh"
+SWITCH="$SCRIPT_DIR/../switch-lib.sh"
 
 usage() {
     cat <<EOF2
-Usage: ccc <model> [region|variant] [claude-options]
-       ccc open <provider> [claude-options]
-       ccc <account> [claude-options]        # Switch account then launch (default model)
-       ccc <model>:<account> [claude-options]
+Usage: claude-launch glm [claude-options]
+       claude-launch open glm [claude-options]
 
 Examples:
-  ccc deepseek                     # Launch Claude Code with DeepSeek
-  ccc open kimi                    # Launch with OpenRouter (kimi)
-  ccc kimi --dangerously-skip-permissions  # Pass options to Claude Code
-  ccc woohelps                     # Switch to 'woohelps' account and launch
-  ccc claude:work                  # Switch to 'work' account and use Claude
+  claude-launch glm                    # Launch Claude Code with GLM
+  claude-launch open glm               # Launch with OpenRouter (GLM)
+  claude-launch glm --dangerously-skip-permissions  # Pass options to Claude Code
 
 Available models:
-  Official: deepseek, glm, kimi, qwen, seed|doubao, claude, minimax
-  OpenRouter: open <provider>
-  Account:  <account> | claude:<account>
+  GLM: glm (Zhipu GLM-5)
+  OpenRouter: open <provider> (glm)
 EOF2
 }
 
-if [[ ! -f "$CCM" ]]; then
-    echo "ccc error: cannot find ccm CLI at $CCM" >&2
+if [[ ! -f "$SWITCH" ]]; then
+    echo "claude-launch error: cannot find switch CLI at $SWITCH" >&2
     exit 1
 fi
 
@@ -547,9 +580,6 @@ fi
 
 model=""
 open_provider=""
-region_arg=""
-seed_variant=""
-account=""
 
 if [[ "${1:-}" == "open" ]]; then
     shift || true
@@ -567,48 +597,27 @@ fi
 
 is_known_model() {
     case "$1" in
-        deepseek|ds|glm|glm5|kimi|kimi2|qwen|minimax|mm|seed|doubao|claude|sonnet|s|open)
+        glm|glm5|open)
             return 0 ;;
         *)
             return 1 ;;
     esac
 }
 
-if [[ "$model" != "open" ]] && [[ "$model" != *:* ]] && ! is_known_model "$model" && [[ ! "$model" =~ ^- ]]; then
-    account="$model"
-    if ! "$CCM" switch-account "$account"; then
-        echo "❌ Failed to switch account: $account" >&2
-        exit 1
-    fi
-    "$CCM" current-account || true
-    eval "$("$CCM" claude)"
+if [[ "$model" == "open" ]]; then
+    eval "$("$SWITCH" open "$open_provider")"
 else
-    if [[ "$model" == "open" ]]; then
-        eval "$("$CCM" open "$open_provider")"
-    else
-        case "$model" in
-            kimi|kimi2|qwen|glm|glm5|minimax|mm)
-                if [[ "${1:-}" =~ ^(global|china|cn)$ ]]; then
-                    region_arg="$1"
-                    shift || true
-                fi
-                ;;
-            seed|doubao)
-                if [[ "${1:-}" =~ ^(doubao|glm|glm5|deepseek|ds|kimi|kimi2)$ ]]; then
-                    seed_variant="$1"
-                    shift || true
-                fi
-                ;;
-        esac
-
-        if [[ -n "$seed_variant" ]]; then
-            eval "$("$CCM" "$model" "$seed_variant")"
-        elif [[ -n "$region_arg" ]]; then
-            eval "$("$CCM" "$model" "$region_arg")"
-        else
-            eval "$("$CCM" "$model")"
-        fi
-    fi
+    case "$model" in
+        glm|glm5)
+            eval "$("$SWITCH" "$model")"
+            ;;
+        *)
+            echo "❌ Unknown model: $model" >&2
+            echo "Supported models: glm" >&2
+            echo "For OpenRouter: open <provider>" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 claude_args=("$@")
@@ -634,31 +643,26 @@ EOF
     content="$(cat <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-CCM="__DATA_DIR__/ccm.sh"
+SWITCH="__DATA_DIR__/switch-lib.sh"
 
 usage() {
     cat <<EOF2
-Usage: ccc <model> [region|variant] [claude-options]
-       ccc open <provider> [claude-options]
-       ccc <account> [claude-options]        # Switch account then launch (default model)
-       ccc <model>:<account> [claude-options]
+Usage: claude-launch glm [claude-options]
+       claude-launch open glm [claude-options]
 
 Examples:
-  ccc deepseek                     # Launch Claude Code with DeepSeek
-  ccc open kimi                    # Launch with OpenRouter (kimi)
-  ccc kimi --dangerously-skip-permissions  # Pass options to Claude Code
-  ccc woohelps                     # Switch to 'woohelps' account and launch
-  ccc claude:work                  # Switch to 'work' account and use Claude
+  claude-launch glm                    # Launch Claude Code with GLM
+  claude-launch open glm               # Launch with OpenRouter (GLM)
+  claude-launch glm --dangerously-skip-permissions  # Pass options to Claude Code
 
 Available models:
-  Official: deepseek, glm, kimi, qwen, seed|doubao, claude, minimax
-  OpenRouter: open <provider>
-  Account:  <account> | claude:<account>
+  GLM: glm (Zhipu GLM-5)
+  OpenRouter: open <provider> (glm)
 EOF2
 }
 
-if [[ ! -f "$CCM" ]]; then
-    echo "ccc error: cannot find ccm CLI at $CCM" >&2
+if [[ ! -f "$SWITCH" ]]; then
+    echo "claude-launch error: cannot find switch CLI at $SWITCH" >&2
     exit 1
 fi
 
@@ -669,9 +673,6 @@ fi
 
 model=""
 open_provider=""
-region_arg=""
-seed_variant=""
-account=""
 
 if [[ "${1:-}" == "open" ]]; then
     shift || true
@@ -689,48 +690,27 @@ fi
 
 is_known_model() {
     case "$1" in
-        deepseek|ds|glm|glm5|kimi|kimi2|qwen|minimax|mm|seed|doubao|claude|sonnet|s|open)
+        glm|glm5|open)
             return 0 ;;
         *)
             return 1 ;;
     esac
 }
 
-if [[ "$model" != "open" ]] && [[ "$model" != *:* ]] && ! is_known_model "$model" && [[ ! "$model" =~ ^- ]]; then
-    account="$model"
-    if ! "$CCM" switch-account "$account"; then
-        echo "❌ Failed to switch account: $account" >&2
-        exit 1
-    fi
-    "$CCM" current-account || true
-    eval "$("$CCM" claude)"
+if [[ "$model" == "open" ]]; then
+    eval "$("$SWITCH" open "$open_provider")"
 else
-    if [[ "$model" == "open" ]]; then
-        eval "$("$CCM" open "$open_provider")"
-    else
-        case "$model" in
-            kimi|kimi2|qwen|glm|glm5|minimax|mm)
-                if [[ "${1:-}" =~ ^(global|china|cn)$ ]]; then
-                    region_arg="$1"
-                    shift || true
-                fi
-                ;;
-            seed|doubao)
-                if [[ "${1:-}" =~ ^(doubao|glm|glm5|deepseek|ds|kimi|kimi2)$ ]]; then
-                    seed_variant="$1"
-                    shift || true
-                fi
-                ;;
-        esac
-
-        if [[ -n "$seed_variant" ]]; then
-            eval "$("$CCM" "$model" "$seed_variant")"
-        elif [[ -n "$region_arg" ]]; then
-            eval "$("$CCM" "$model" "$region_arg")"
-        else
-            eval "$("$CCM" "$model")"
-        fi
-    fi
+    case "$model" in
+        glm|glm5)
+            eval "$("$SWITCH" "$model")"
+            ;;
+        *)
+            echo "❌ Unknown model: $model" >&2
+            echo "Supported models: glm" >&2
+            echo "For OpenRouter: open <provider>" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 claude_args=("$@")
@@ -761,10 +741,10 @@ EOF
 
 write_project_activate() {
   local project_dir="$1"
-  local activate_path="$project_dir/.ccm/activate"
+  local activate_path="$project_dir/.claude-switch/activate"
   cat > "$activate_path" <<'EOF'
-# CCM project activation
-# Usage: source .ccm/activate
+# Claude Switch project activation
+# Usage: source .claude-switch/activate
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export PATH="$SCRIPT_DIR/bin:$PATH"
@@ -777,10 +757,10 @@ main() {
   parse_args "$@"
 
   echo ""
-  log_info "$(t "CCM Installer" "CCM 安装器")"
+  log_info "$(t "Claude Switch Installer" "Claude Switch 安装器")"
   echo "$(t "Default: user-level PATH install + rc injection" "默认：用户级 PATH 安装 + 写入 rc")"
   echo "$(t "Options: --project (project-local), --system (system-wide), --no-rc (disable rc)" "可选项：--project（项目内）、--system（系统级）、--no-rc（不写入 rc）")"
-  echo "$(t "Tip: use --cleanup-legacy if you previously installed the old rc-based version" "提示：如果以前使用过旧版 rc 安装，请用 --cleanup-legacy 清理")"
+  echo "$(t "Tip: use --cleanup-legacy if you previously installed the old version" "提示：如果以前使用过旧版安装，请用 --cleanup-legacy 清理")"
   echo "$(t "Interactive: auto-enabled when run without flags in a TTY" "交互模式：在 TTY 且不带参数运行时自动启用")"
   echo ""
 
@@ -807,7 +787,7 @@ main() {
     fi
 
     if [[ "$MODE" != "project" ]]; then
-      read -r -p "$(t "Inject ccm/ccc functions into shell rc? [Y/n]: " "是否写入 shell rc（ccm/ccc 函数）？[Y/n]：")" rc_choice
+      read -r -p "$(t "Inject claude-switch/claude-launch functions into shell rc? [Y/n]: " "是否写入 shell rc（claude-switch/claude-launch 函数）？[Y/n]：")" rc_choice
       rc_choice="${rc_choice:-Y}"
       case "$rc_choice" in
         n|N|no|NO) ENABLE_RC=false ;;
@@ -829,8 +809,8 @@ main() {
   local bin_dir
   local data_dir
   if [[ "$MODE" == "project" ]]; then
-    bin_dir="$PROJECT_DIR/.ccm/bin"
-    data_dir="$PROJECT_DIR/.ccm"
+    bin_dir="$PROJECT_DIR/.claude-switch/bin"
+    data_dir="$PROJECT_DIR/.claude-switch"
   else
     bin_dir="$(select_bin_dir)"
     data_dir="$(select_data_dir)"
@@ -886,8 +866,8 @@ main() {
   install_assets "$data_dir"
 
   # Install wrappers
-  write_ccm_wrapper "$bin_dir" "$MODE" "$data_dir"
-  write_ccc_wrapper "$bin_dir" "$MODE" "$data_dir"
+  write_claude_switch_wrapper "$bin_dir" "$MODE" "$data_dir"
+  write_claude_launch_wrapper "$bin_dir" "$MODE" "$data_dir"
 
   # Optional rc injection
   if $ENABLE_RC && [[ "$MODE" != "project" ]]; then
@@ -895,8 +875,8 @@ main() {
     rc_files=( $(detect_rc_files) )
     local rc_target="${rc_files[0]:-$HOME/.zshrc}"
     remove_existing_block "$rc_target"
-    append_function_block "$rc_target" "$data_dir/ccm.sh"
-    log_info "$(t "Injected ccm/ccc functions into:" "已写入 ccm/ccc 函数到：") $rc_target"
+    append_function_block "$rc_target" "$data_dir/switch-lib.sh"
+    log_info "$(t "Injected claude-switch/claude-launch functions into:" "已写入 claude-switch/claude-launch 函数到：") $rc_target"
   fi
 
   if [[ "$MODE" == "project" ]]; then
@@ -919,16 +899,16 @@ main() {
   echo ""
   if [[ "$MODE" == "project" ]]; then
     echo "$(t "Next steps:" "下一步：")"
-    echo "  source .ccm/activate"
-    echo "  ccm status"
+    echo "  source .claude-switch/activate"
+    echo "  claude-switch status"
   else
     echo "$(t "Next steps:" "下一步：")"
     if $ENABLE_RC; then
       echo "  source ~/.zshrc $(t "(or ~/.bashrc)" "（或 ~/.bashrc）")"
-      echo "  ccm status"
+      echo "  claude-switch status"
     else
-      echo "  eval \"\$(ccm deepseek)\"   # $(t "Apply env to current shell" "在当前 shell 生效")"
-      echo "  ccc deepseek              # $(t "Switch + launch Claude Code" "切换并启动 Claude Code")"
+      echo "  eval \"\$(claude-switch glm)\"   # $(t "Apply env to current shell" "在当前 shell 生效")"
+      echo "  claude-launch glm              # $(t "Switch + launch Claude Code" "切换并启动 Claude Code")"
     fi
   fi
 }
